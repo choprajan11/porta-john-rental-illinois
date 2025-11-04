@@ -11,14 +11,29 @@ import ProcessWidget from "@/app/components/Widgets/ProcessWidget";
 import NavbarState from "@/app/components/State/NavbarState";
 import Link from "next/link";
 import ZipAndNeighAccordian from "@/app/components/Home/ZipAndNeighAccordian";
+// import Service from "@/app/Components/Service";
 
 import contactContent from "@/app/Data/content";
 import subdomainContent from "@/app/Data/FinalContent";
+import { headers } from "next/headers";
 import PortaPottyCalculator from "@/app/components/Widgets/Calculator";
 
 const ContactInfo: any = contactContent.contactContent;
-const content: any = subdomainContent.subdomainData;
 const home: any = contactContent.homePageContent;
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+// Function to fetch subdomain data from API
+async function getSubdomainData() {
+  const headersList = headers();
+  const proto: any = headersList.get("x-forwarded-proto") || "http";
+  const host = headersList.get("host");
+  const baseUrl = `${proto}://${host}`;
+  const res = await fetch(`${baseUrl}/api/subdomains`, { cache: "no-store" });
+  return res.json().catch(() => ({}));
+}
+
 interface SubdomainPageProps {
   params: { State: string };
 }
@@ -74,8 +89,28 @@ const stateName: Record<string, string> = {
   WI: "Wisconsin",
   WY: "Wyoming",
 };
-export function generateMetadata({ params }: SubdomainPageProps) {
+
+export async function generateMetadata({ params }: SubdomainPageProps) {
   const { State } = params;
+
+  // Fetch content from API
+  let content: any = {};
+  try {
+    const data = await getSubdomainData();
+    if (data && data.subdomains) {
+      // Convert array back to object with slug as key
+      content = data.subdomains.reduce((acc: any, item: any) => {
+        if (item.slug) {
+          acc[item.slug] = item;
+        }
+        return acc;
+      }, {});
+    }
+  } catch (e) {
+    // Fallback to static content if API fails
+    content = subdomainContent.subdomainData;
+  }
+
   const cityData: any = content;
   const ContentData = cityData[State];
 
@@ -95,9 +130,28 @@ export function generateMetadata({ params }: SubdomainPageProps) {
     },
   };
 }
-export default function SubdomainPage({ params }: SubdomainPageProps) {
+export default async function SubdomainPage({ params }: SubdomainPageProps) {
   // console.log(params)
   const { State } = params;
+
+  // Fetch content from API
+  let content: any = {};
+  try {
+    const data = await getSubdomainData();
+    if (data && data.subdomains) {
+      // Convert array back to object with slug as key
+      content = data.subdomains.reduce((acc: any, item: any) => {
+        if (item.slug) {
+          acc[item.slug] = item;
+        }
+        return acc;
+      }, {});
+    }
+  } catch (e) {
+    // Fallback to static content if API fails
+    content = subdomainContent.subdomainData;
+  }
+
   const cityData: any = content;
   const abbrevations: any = State.split("-").pop();
 
@@ -120,6 +174,7 @@ export default function SubdomainPage({ params }: SubdomainPageProps) {
   const slugs: any = Object.keys(cityData)
     .filter((key) => key !== State)
     .map((key) => cityData[key]);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -189,7 +244,6 @@ export default function SubdomainPage({ params }: SubdomainPageProps) {
       },
     ],
   };
-
   return (
     <div className="">
       <NavbarState />
@@ -514,13 +568,14 @@ export default function SubdomainPage({ params }: SubdomainPageProps) {
           </div>
         )}
         {/* Neighborhood */}
-        {ContentData?.neighbourhoods ? (
+         {ContentData?.neighbourhoods ? (
           <div className="">
             <div className="block border px-4 md:hidden">
               <ZipAndNeighAccordian
                 ques={`Neighborhoods we serve in  ${ContentData?.name}`}
                 ans={ContentData?.neighbourhoods?.split("|")}
                 slug={ContentData?.slug}
+                neighborhood={true}
               />
             </div>
             <div className="mt-28 hidden items-center justify-start md:mx-40 md:block ">
@@ -532,14 +587,19 @@ export default function SubdomainPage({ params }: SubdomainPageProps) {
               <div className="mx-10 mt-4 flex h-fit w-auto flex-wrap justify-center gap-4">
                 {ContentData?.neighbourhoods?.split("|").map((item: any) => (
                   <div className="" key={item}>
-                    <a
-                      target="_blank"
-                      href={`https://www.google.com/maps/search/?api=1&query=${item}, ${ContentData?.slug},`}
+                    <Link
+                      href={`/${
+                        item
+                          .trim()
+                          .toLowerCase()
+                          .replace(/\.+$/, "") // remove trailing dots
+                          .replace(/\s+/g, "-") // replace spaces with hyphens
+                      }`}
                     >
                       <p className="border bg-minor px-2 py-1 text-white duration-100 ease-in-out hover:text-main">
                         {item}
                       </p>
-                    </a>
+                    </Link>
                   </div>
                 ))}
               </div>
@@ -612,7 +672,24 @@ export default function SubdomainPage({ params }: SubdomainPageProps) {
   );
 }
 
-export function generateStaticParams() {
+export async function generateStaticParams() {
+  let content: any = {};
+  try {
+    const data = await getSubdomainData();
+    if (data && data.subdomains) {
+      // Convert array back to object with slug as key
+      content = data.subdomains.reduce((acc: any, item: any) => {
+        if (item.slug) {
+          acc[item.slug] = item;
+        }
+        return acc;
+      }, {});
+    }
+  } catch (e) {
+    // Fallback to static content if API fails
+    content = subdomainContent.subdomainData;
+  }
+
   const cityData: any = content;
   const subDomain = Object.keys(cityData);
   return subDomain.map((locations: any) => ({
